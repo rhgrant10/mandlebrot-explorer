@@ -1,86 +1,95 @@
 package explorer
 
 import (
+	"bytes"
+	_ "embed"
 	"fmt"
 	"image/color"
 
 	"github.com/rhgrant10/mandlebrot-explorer/pkg/geometry"
 
-	"golang.org/x/image/font/basicfont"
-
 	"github.com/hajimehoshi/ebiten/v2"
 	"github.com/hajimehoshi/ebiten/v2/inpututil"
-	"github.com/hajimehoshi/ebiten/v2/text"
+	"github.com/hajimehoshi/ebiten/v2/text/v2"
 )
 
-func NewExplorer(screen Screen, window Window[float64], image Graph) Explorer {
+//go:embed InterVariable.ttf
+var ttfBytes []byte
+
+func loadFont() text.Face {
+	fontFile := bytes.NewReader(ttfBytes)
+	faceSource, err := text.NewGoTextFaceSource(fontFile)
+	if err != nil {
+		panic(err)
+	}
+	return &text.GoTextFace{
+		Source: faceSource,
+		Size:   18,
+	}
+}
+
+func NewGame(window Window[float64], image Graph) Game {
 	originalWindowRect := window.Rect
-	return Explorer{
-		Screen:             screen,
-		Window:             window,
-		Graph:              image,
+	return Game{
+		window:             window,
+		graph:              image,
 		selection:          NewSelection(10),
+		font:               loadFont(),
 		originalWindowRect: originalWindowRect,
 	}
 }
 
-// Explorer implements the ebiten.Game interface.
-type Explorer struct {
-	Screen             Screen
-	Window             Window[float64]
-	Graph              Graph
+// Game implements the ebiten.Game interface.
+type Game struct {
+	window             Window[float64]
+	graph              Graph
 	selection          Selection
+	font               text.Face
 	isFresh            bool
 	originalWindowRect geometry.Rect[float64]
 }
 
-func (g *Explorer) ResetWindow() {
-	newWindowRect := g.originalWindowRect
-	g.Window.Rect = newWindowRect
-	g.isFresh = false
-}
-
 // Update updates the game logic.
-func (g *Explorer) Update() error {
+func (g *Game) Update() error {
 	if ebiten.IsKeyPressed(ebiten.KeyEqual) {
-		g.AdjustIterLimit(20)
+		g.adjustIterLimit(20)
 	}
 	if ebiten.IsKeyPressed(ebiten.KeyMinus) {
-		g.AdjustIterLimit(-20)
+		g.adjustIterLimit(-20)
 	}
 	if ebiten.IsKeyPressed(ebiten.KeyR) {
-		g.ResetWindow()
+		g.resetWindow()
 	}
 	if ebiten.IsKeyPressed(ebiten.KeyEnter) {
 		g.isFresh = false
 	}
-	if !g.isFresh && !g.Graph.IsRendering() {
+	if !g.isFresh && !g.graph.IsRendering() {
 		go func() {
 			ebiten.SetCursorShape(ebiten.CursorShapeNotAllowed)
 			defer ebiten.SetCursorShape(ebiten.CursorShapeCrosshair)
-			g.Graph.Render(g.Window)
+			g.graph.Render(g.window)
 			g.isFresh = true
 		}()
 	}
-	if !g.Graph.IsRendering() && (inpututil.IsMouseButtonJustPressed(ebiten.MouseButton0) ||
+	if !g.graph.IsRendering() && (inpututil.IsMouseButtonJustPressed(ebiten.MouseButton0) ||
 		inpututil.IsMouseButtonJustPressed(ebiten.MouseButton2)) {
 		g.selection.Start()
 	}
 	if inpututil.IsMouseButtonJustReleased(ebiten.MouseButton0) {
-		g.SetWindow(g.TransformRect(g.selection.End()))
+		g.setWindow(g.transformRect(g.selection.End()))
 	}
 	if inpututil.IsMouseButtonJustReleased(ebiten.MouseButton2) {
 		sel := g.selection.End()
-		selWindow := g.TransformRect(sel)
-		scaleFactor := float64(sel.Width()) / float64(g.Screen.Width())
-		from := g.Window.CenterPoint()
+		selWindow := g.transformRect(sel)
+		scaleFactor := float64(sel.Width()) / float64(g.graph.Resolution().X)
+		from := g.window.CenterPoint()
 		to := selWindow.CenterPoint()
-		rect := g.Window.Rect
+		rect := g.window.Rect
 		(rect.
 			Translate(*from.Negate()).
 			Scale(1.0 / scaleFactor).
 			Translate(to))
-		g.SetWindow(rect)
+		g.setWindow(rect)
 	}
 	if ebiten.IsKeyPressed(ebiten.KeyEscape) ||
 		ebiten.IsKeyPressed(ebiten.KeyControl) &&
@@ -90,48 +99,63 @@ func (g *Explorer) Update() error {
 	return nil
 }
 
-func (g *Explorer) TransformRect(rect geometry.Rect[int]) geometry.Rect[float64] {
+// Draw renders the game screen.
+func (g *Game) Draw(screen *ebiten.Image) {
+	g.graph.DrawOn(screen)
+	g.selection.Render(screen, g.window)
+	debugText := g.getDebugText()
+	ops := text.DrawOptions{}
+	ops.LineSpacing = 32
+	ops.GeoM.Translate(16, 16)
+	ops.ColorScale.ScaleWithColor(color.White)
+	text.Draw(screen, debugText, g.font, &ops)
+	ops.GeoM.Translate(1, 1)
+	ops.ColorScale.ScaleWithColor(color.Black)
+	text.Draw(screen, debugText, g.font, &ops)
+	ops.GeoM.Translate(1, 1)
+	text.Draw(screen, debugText, g.font, &ops)
+}
+
+// Layout defines the screen layout.
+func (g *Game) Layout(outsideWidth, outsideHeight int) (int, int) {
+	size := g.graph.Resolution()
+	return size.X, size.Y
+}
+
+func (g *Game) transformRect(rect geometry.Rect[int]) geometry.Rect[float64] {
+	size := g.graph.Resolution()
 	return geometry.Rect[float64]{
-		Min: g.Window.Transform(rect.Min.X, rect.Min.Y, g.Screen.Width(), g.Screen.Height()),
-		Max: g.Window.Transform(rect.Max.X, rect.Max.Y, g.Screen.Width(), g.Screen.Height()),
+		Min: g.window.Transform(rect.Min.X, rect.Min.Y, size.X, size.Y),
+		Max: g.window.Transform(rect.Max.X, rect.Max.Y, size.X, size.Y),
 	}
 }
 
-func (g *Explorer) AdjustIterLimit(change int) {
-	g.Graph.Iterator.IterLimit = max(64, g.Graph.Iterator.IterLimit+change)
-	g.Graph.Colorizer.SetResolution(g.Graph.Iterator.IterLimit)
+func (g *Game) adjustIterLimit(change int) {
+	g.graph.Iterator.IterLimit = max(64, g.graph.Iterator.IterLimit+change)
+	g.graph.Colorizer.SetResolution(g.graph.Iterator.IterLimit)
 }
 
-func (g *Explorer) SetWindow(rect geometry.Rect[float64]) {
-	g.Window.Rect = rect
+func (g *Game) setWindow(rect geometry.Rect[float64]) {
+	g.window.Rect = rect
 	g.isFresh = false
 }
 
-// Draw renders the game screen.
-func (g *Explorer) Draw(screen *ebiten.Image) {
-	g.Graph.DrawOn(screen)
-	g.selection.Render(screen, g.Window)
-	debugText := g.getDebugText()
-	ff := text.FaceWithLineHeight(basicfont.Face7x13, 16)
-	text.Draw(screen, debugText, ff, 18, 18, color.Black)
-	text.Draw(screen, debugText, ff, 17, 17, color.Black)
-	text.Draw(screen, debugText, ff, 16, 16, color.White)
+func (g *Game) resetWindow() {
+	newWindowRect := g.originalWindowRect
+	g.window.Rect = newWindowRect
+	g.isFresh = false
 }
 
-func (g *Explorer) getDebugText() string {
+func (g *Game) getDebugText() string {
+	size := g.graph.Resolution()
 	mouse := g.selection.GetMouse()
-	hover := g.Window.Transform(mouse.X, mouse.Y, g.Screen.Width(), g.Screen.Height())
+	hover := g.window.Transform(mouse.X, mouse.Y, size.Y, size.Y)
 	text := fmt.Sprintf(
 		"iterLimit: %d\nmouse X: % 5d (% .16e)\nmouse Y: % 5d (% .16e)\n",
-		g.Graph.Iterator.IterLimit, mouse.X, hover.X, mouse.Y, hover.Y,
+		g.graph.Iterator.IterLimit, mouse.X, hover.X, mouse.Y, hover.Y,
 	)
 	if g.selection.IsBeingMade() {
 		text = fmt.Sprintf("%s\n%v", text, g.selection.Get())
 	}
 	return text
-}
-
-// Layout defines the screen layout.
-func (g *Explorer) Layout(outsideWidth, outsideHeight int) (int, int) {
-	return g.Screen.Width(), g.Screen.Height()
 }

@@ -12,17 +12,17 @@ import (
 )
 
 const (
-	screenWidth  int     = 3840 // Adjust to your screen resolution
-	screenHeight int     = 2160
-	xMin         float64 = -3.0
-	xMax         float64 = 1.2
-	yMin         float64 = -1.2
-	yMax         float64 = 1.2
+	xMin float64 = -3.0
+	xMax float64 = 1.2
+	yMin float64 = -1.2
+	yMax float64 = 1.2
 )
 
 func main() {
-	// Initialize the pixel buffer
-	screen := explorer.NewScreen(screenWidth, screenHeight)
+	// Set the window to full screen
+	ebiten.SetFullscreen(true)
+	monitor := ebiten.Monitor()
+	screenWidth, screenHeight := monitor.Size()
 
 	iterator := fractal.Iterator{
 		Equation:  fractal.Mandlebrot,
@@ -48,24 +48,20 @@ func main() {
 		},
 	}
 
-	image := explorer.NewGraph(
+	graph := explorer.NewGraph(
 		screenWidth, screenHeight,
 		iterator,
 		&pallete,
 	)
 
-	// Create a new Game instance
-	game := explorer.NewExplorer(
-		screen,
+	// Create the explorerGame and run it
+	explorerGame := explorer.NewGame(
 		window,
-		image,
+		graph,
 	)
 
-	// Set the window to full screen
-	ebiten.SetFullscreen(true)
-
 	// Run the game
-	if err := ebiten.RunGame(&game); err != nil {
+	if err := ebiten.RunGame(&explorerGame); err != nil {
 		log.Fatal(err)
 	}
 }

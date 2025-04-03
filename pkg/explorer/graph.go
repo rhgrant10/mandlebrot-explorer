@@ -6,6 +6,7 @@ import (
 	"github.com/hajimehoshi/ebiten/v2"
 	"github.com/rhgrant10/mandlebrot-explorer/pkg/coloring"
 	"github.com/rhgrant10/mandlebrot-explorer/pkg/fractal"
+	"github.com/rhgrant10/mandlebrot-explorer/pkg/geometry"
 )
 
 func NewGraph(
@@ -27,19 +28,23 @@ type Graph struct {
 	canvas     Canvas
 }
 
+func (im *Graph) Resolution() geometry.Point[int] {
+	return im.canvas.Size()
+}
+
 func (im *Graph) Render(window Window[float64]) error {
 	im.isUpdating = true
-	size := im.canvas.Size()
+	resolution := im.Resolution()
 	wg := sync.WaitGroup{}
 	sem := make(chan struct{}, 120)
-	for y := 0; y < size.Y; y++ {
-		for x := 0; x < size.X; x++ {
+	for y := 0; y < resolution.Y; y++ {
+		for x := 0; x < resolution.X; x++ {
 			wg.Add(1)
 			sem <- struct{}{}
 			go func() {
 				defer wg.Done()
 				defer func() { <-sem }()
-				c := window.Transform(x, y, size.X, size.Y)
+				c := window.Transform(x, y, resolution.X, resolution.Y)
 				p := fractal.PointPair{
 					Z: 0,
 					C: c.AsComplex(),

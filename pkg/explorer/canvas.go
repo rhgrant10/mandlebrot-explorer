@@ -8,6 +8,8 @@ import (
 	"github.com/hajimehoshi/ebiten/v2"
 )
 
+const bytesPerPixel = 4
+
 func NewCanvas(w, h int) Canvas {
 	return Canvas{
 		Rect:   geometry.SizedRect(w, h),
