@@ -8,14 +8,16 @@ import (
 	"github.com/rhgrant10/mandlebrot-explorer/pkg/coloring"
 	"github.com/rhgrant10/mandlebrot-explorer/pkg/explorer"
 	"github.com/rhgrant10/mandlebrot-explorer/pkg/fractal"
-	"github.com/rhgrant10/mandlebrot-explorer/pkg/geometry"
 )
 
 const (
-	xMin float64 = -3.0
-	xMax float64 = 1.2
-	yMin float64 = -1.2
-	yMax float64 = 1.2
+	xMin        float64 = -3.0
+	xMax        float64 = 1.2
+	yMin        float64 = -1.2
+	yMax        float64 = 1.2
+	absLimit    float64 = 2.0
+	iterLimit   int     = 1000
+	concurrency int     = 1000
 )
 
 func main() {
@@ -26,8 +28,8 @@ func main() {
 
 	iterator := fractal.Iterator{
 		Equation:  fractal.Mandlebrot,
-		AbsLimit:  2.0,
-		IterLimit: 64,
+		AbsLimit:  absLimit,
+		IterLimit: iterLimit,
 	}
 	pallete := coloring.NewPallete(
 		iterator.IterLimit,
@@ -41,17 +43,14 @@ func main() {
 		color.RGBA{R: 238, G: 130, B: 238}, // Violet
 	)
 
-	window := explorer.Window[float64]{
-		Rect: geometry.Rect[float64]{
-			Min: geometry.Point[float64]{X: xMin, Y: yMin},
-			Max: geometry.Point[float64]{X: xMax, Y: yMax},
-		},
-	}
+	window := explorer.NewWindow(xMin, yMin, xMax, yMax)
+	window.ZoomTo(-0.7463, 0.1102, 100.0)
 
 	graph := explorer.NewGraph(
 		screenWidth, screenHeight,
 		iterator,
 		&pallete,
+		concurrency,
 	)
 
 	// Create the explorerGame and run it

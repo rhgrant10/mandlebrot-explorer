@@ -26,16 +26,3 @@ func (it *Iterator) Iterate(p PointPair) IterationResult {
 		IterCount:  n,
 	}
 }
-
-func (it *Iterator) Iterate2(p PointPair) int {
-	n := 0
-	for ; n < it.IterLimit; n++ {
-		if cmplx.Abs(p.Z) > it.AbsLimit {
-			break
-		}
-		t := it.Equation(p)
-		p.Z = t.Z
-		p.C = t.C
-	}
-	return n
-}

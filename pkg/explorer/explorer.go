@@ -51,45 +51,48 @@ type Game struct {
 
 // Update updates the game logic.
 func (g *Game) Update() error {
-	if ebiten.IsKeyPressed(ebiten.KeyEqual) {
-		g.adjustIterLimit(20)
-	}
-	if ebiten.IsKeyPressed(ebiten.KeyMinus) {
-		g.adjustIterLimit(-20)
-	}
-	if ebiten.IsKeyPressed(ebiten.KeyR) {
-		g.resetWindow()
-	}
-	if ebiten.IsKeyPressed(ebiten.KeyEnter) {
-		g.isFresh = false
-	}
-	if !g.isFresh && !g.graph.IsRendering() {
-		go func() {
-			ebiten.SetCursorShape(ebiten.CursorShapeNotAllowed)
-			defer ebiten.SetCursorShape(ebiten.CursorShapeCrosshair)
-			g.graph.Render(g.window)
-			g.isFresh = true
-		}()
-	}
-	if !g.graph.IsRendering() && (inpututil.IsMouseButtonJustPressed(ebiten.MouseButton0) ||
-		inpututil.IsMouseButtonJustPressed(ebiten.MouseButton2)) {
-		g.selection.Start()
-	}
-	if inpututil.IsMouseButtonJustReleased(ebiten.MouseButton0) {
-		g.setWindow(g.transformRect(g.selection.End()))
-	}
-	if inpututil.IsMouseButtonJustReleased(ebiten.MouseButton2) {
-		sel := g.selection.End()
-		selWindow := g.transformRect(sel)
-		scaleFactor := float64(sel.Width()) / float64(g.graph.Resolution().X)
-		from := g.window.CenterPoint()
-		to := selWindow.CenterPoint()
-		rect := g.window.Rect
-		(rect.
-			Translate(*from.Negate()).
-			Scale(1.0 / scaleFactor).
-			Translate(to))
-		g.setWindow(rect)
+	if !g.isFresh {
+		if !g.graph.IsRendering() {
+			go func() {
+				ebiten.SetCursorShape(ebiten.CursorShapeNotAllowed)
+				defer ebiten.SetCursorShape(ebiten.CursorShapeCrosshair)
+				g.graph.Render(g.window)
+				g.isFresh = true
+			}()
+		}
+	} else {
+		if ebiten.IsKeyPressed(ebiten.KeyEqual) {
+			g.adjustIterLimit(20)
+		}
+		if ebiten.IsKeyPressed(ebiten.KeyMinus) {
+			g.adjustIterLimit(-20)
+		}
+		if ebiten.IsKeyPressed(ebiten.KeyR) {
+			g.resetWindow()
+		}
+		if ebiten.IsKeyPressed(ebiten.KeyEnter) {
+			g.isFresh = false
+		}
+		if inpututil.IsMouseButtonJustPressed(ebiten.MouseButton0) ||
+			inpututil.IsMouseButtonJustPressed(ebiten.MouseButton2) {
+			g.selection.Start()
+		}
+		if inpututil.IsMouseButtonJustReleased(ebiten.MouseButton0) {
+			g.setWindow(g.transformRect(g.selection.End()))
+		}
+		if inpututil.IsMouseButtonJustReleased(ebiten.MouseButton2) {
+			sel := g.selection.End()
+			selWindow := g.transformRect(sel)
+			scaleFactor := float64(sel.Width()) / float64(g.graph.Resolution().X)
+			from := g.window.CenterPoint()
+			to := selWindow.CenterPoint()
+			rect := g.window.Rect
+			(rect.
+				Translate(*from.Negate()).
+				Scale(1.0 / scaleFactor).
+				Translate(to))
+			g.setWindow(rect)
+		}
 	}
 	if ebiten.IsKeyPressed(ebiten.KeyEscape) ||
 		ebiten.IsKeyPressed(ebiten.KeyControl) &&
